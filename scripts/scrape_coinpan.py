@@ -1,12 +1,10 @@
-# scripts/scrape_coinpan.py
 import json
 import os
 import re
 from datetime import datetime, timezone, timedelta
 
-import requests
 from bs4 import BeautifulSoup
-
+from playwright.sync_api import sync_playwright
 
 KST = timezone(timedelta(hours=9))
 URL = "https://coinpan.com/"
@@ -16,7 +14,7 @@ def parse_premium_text(td_text: str) -> int | None:
     """
     Examples:
       "+587,305 +0.44%" -> 587305
-      "-"              -> None
+      "-”               -> None
     """
     td_text = td_text.strip()
     if td_text == "-" or td_text == "":
@@ -29,38 +27,60 @@ def parse_premium_text(td_text: str) -> int | None:
     return int(m.group(1).replace(",", ""))
 
 
-def fetch_html_requests() -> str:
-    # 403 방지용 헤더(그래도 막힐 수 있음)
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; premium-tracker/1.0; +https://github.com/)",
-        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Referer": "https://coinpan.com/",
-    }
-    r = requests.get(URL, headers=headers, timeout=30)
-    r.raise_for_status()
-    return r.text
+def fetch_html_playwright() -> str:
+    """
+    coinpan은 requests로 가져오면 값이 비어있거나 차단될 수 있어,
+    브라우저 렌더링 후 최종 HTML을 얻는다.
+    """
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/120.0.0.0 Safari/537.36"
+        )
+
+        page.goto(URL, wait_until="domcontentloaded", timeout=60000)
+
+        # 테이블이 존재할 때까지 대기
+        page.wait_for_selector("table.coin_currency", timeout=60000)
+
+        # JS로 숫자 채워질 시간을 조금 더 줌
+        page.wait_for_timeout(3000)
+
+        html = page.content()
+        browser.close()
+        return html
 
 
 def extract_premiums(html: str) -> dict[str, int | None]:
     soup = BeautifulSoup(html, "html.parser")
+
     table = soup.select_one("table.coin_currency")
     if not table:
-        raise RuntimeError("coin_currency table not found")
+        raise RuntimeError("coin_currency table not found (blocked or page changed)")
 
     out: dict[str, int | None] = {}
-    for row in table.select("tbody tr.exchange_info"):
-        ex = row.get("data-exchange") or row.select_one("th.exchange_name")
-        ex_name = ex if isinstance(ex, str) else ex.get_text(strip=True)
+    rows = table.select("tbody tr.exchange_info")
+    if not rows:
+        raise RuntimeError("exchange rows not found (blocked or page changed)")
+
+    for row in rows:
+        ex_key = row.get("data-exchange")
+        if not ex_key:
+            # fallback: exchange name text
+            th = row.select_one("th.exchange_name")
+            ex_key = th.get_text(strip=True) if th else "unknown"
 
         td = row.select_one("td.price.korea_premium")
         if not td:
+            # 어떤 행은 없을 수도 있음
+            out[ex_key] = None
             continue
-        premium_value = parse_premium_text(td.get_text(" ", strip=True))
-        out[ex_name] = premium_value
 
-    if not out:
-        raise RuntimeError("No premiums extracted")
+        premium_value = parse_premium_text(td.get_text(" ", strip=True))
+        out[ex_key] = premium_value
+
     return out
 
 
@@ -78,23 +98,22 @@ def save_json(path: str, data: list[dict]) -> None:
 
 
 def main():
-    # KST 날짜(일봉)
     today = datetime.now(KST).strftime("%Y-%m-%d")
 
-    html = fetch_html_requests()
+    html = fetch_html_playwright()
+
+    # ✅ 디버그: Actions에서 확인 가능하도록 저장
+    with open("coinpan_debug.html", "w", encoding="utf-8") as f:
+        f.write(html)
+
     premiums = extract_premiums(html)
+
+    # 값이 전부 None이면 실패로 보고 에러를 던져서 Actions에서 바로 감지되게 함
+    if premiums and all(v is None for v in premiums.values()):
+        raise RuntimeError("All premiums are None (likely still blocked or values not rendered)")
 
     path = "data/korea_premium.json"
     rows = load_json(path)
 
-    # 같은 날짜가 이미 있으면 덮어쓰기(재실행 대비)
-    rows = [r for r in rows if r.get("date") != today]
-    rows.append({"date": today, "premiums": premiums})
-    rows.sort(key=lambda x: x["date"])
-
-    save_json(path, rows)
-    print(f"Saved {today}: {premiums}")
-
-
-if __name__ == "__main__":
-    main()
+    # 같은 날짜 데이터가 있으면 덮어쓰기(재실행 대비)
+    rows = [r for r in rows if r.get("date"]()
