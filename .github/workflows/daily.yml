@@ -1,0 +1,38 @@
+name: Daily Korea Premium
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 매일 UTC 03:00 = 한국시간(KST) 12:00
+  workflow_dispatch:       # 수동 실행 버튼도 활성화
+
+permissions:
+  contents: write          # Actions가 커밋/푸시하려면 필요
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+
+      - name: Scrape
+        run: |
+          python scripts/scrape_coinpan.py
+
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/korea_premium.json
+          git commit -m "Update korea premium" || echo "No changes"
+          git push
