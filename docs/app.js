@@ -39,10 +39,11 @@ function movingAverage(points, windowSize) {
 }
 
 async function loadRows() {
-  const res = await fetch("../data/korea_premium.json", { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to load data/korea_premium.json");
+  const res = await fetch("./data/korea_premium.json", { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to load docs/data/korea_premium.json");
   return await res.json();
 }
+
 
 function listExchanges(rows) {
   const set = new Set();
