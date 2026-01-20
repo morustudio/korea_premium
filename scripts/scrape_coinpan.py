@@ -5,7 +5,6 @@ from datetime import datetime, timezone, timedelta
 import requests
 
 KST = timezone(timedelta(hours=9))
-
 DATA_PATH = "data/korea_premium.json"
 
 
@@ -15,13 +14,21 @@ def get_json(url: str, headers: dict | None = None, timeout: int = 20) -> dict:
     return r.json()
 
 
-def safe_int(x) -> int | None:
+def safe_float(x) -> float | None:
     try:
         if x is None:
             return None
         if isinstance(x, str):
             x = x.replace(",", "").strip()
-        return int(float(x))
+        return float(x)
+    except Exception:
+        return None
+
+
+def safe_int(x) -> int | None:
+    try:
+        v = safe_float(x)
+        return None if v is None else int(round(v))
     except Exception:
         return None
 
@@ -30,24 +37,49 @@ def safe_int(x) -> int | None:
 # FX: USD -> KRW (무료/무키)
 # --------------------------
 def fetch_usdkrw() -> float:
-    """
-    무료 환율 API (키 없이 동작하는 편)
-    실패 시 예외 발생 -> 상위에서 처리
-    """
     j = get_json("https://open.er-api.com/v6/latest/USD")
     rate = j["rates"]["KRW"]
     return float(rate)
 
 
 # --------------------------
-# Global BTC/USD proxy
+# Global BTC/USD (바이낸스 금지 회피)
+# 우선순위: CoinGecko -> Coinbase -> Kraken
 # --------------------------
-def fetch_global_btc_usd() -> float:
-    """
-    해외 BTC 가격(USD 대용): Binance BTCUSDT 사용 (USDT≈USD 가정)
-    """
-    j = get_json("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT")
-    return float(j["price"])
+def fetch_global_btc_usd() -> tuple[float, str]:
+    # 1) CoinGecko
+    try:
+        j = get_json(
+            "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+        )
+        price = safe_float(j["bitcoin"]["usd"])
+        if price:
+            return price, "coingecko"
+    except Exception:
+        pass
+
+    # 2) Coinbase
+    try:
+        j = get_json("https://api.coinbase.com/v2/prices/BTC-USD/spot")
+        price = safe_float(j["data"]["amount"])
+        if price:
+            return price, "coinbase"
+    except Exception:
+        pass
+
+    # 3) Kraken
+    try:
+        j = get_json("https://api.kraken.com/0/public/Ticker?pair=XBTUSD")
+        # Kraken 응답은 키가 변동될 수 있어 result의 첫 키를 사용
+        result = j.get("result", {})
+        first_key = next(iter(result.keys()))
+        price = safe_float(result[first_key]["c"][0])  # last trade closed
+        if price:
+            return price, "kraken"
+    except Exception:
+        pass
+
+    raise RuntimeError("Failed to fetch global BTC/USD from all providers")
 
 
 # --------------------------
@@ -60,13 +92,11 @@ def fetch_upbit_btc_krw() -> int:
 
 def fetch_bithumb_btc_krw() -> int:
     j = get_json("https://api.bithumb.com/public/ticker/BTC_KRW")
-    # closing_price가 문자열로 옴
     return safe_int(j["data"]["closing_price"])
 
 
 def fetch_coinone_btc_krw() -> int:
     j = get_json("https://api.coinone.co.kr/public/v2/ticker_new/KRW/BTC")
-    # last가 문자열
     return safe_int(j["tickers"][0]["last"])
 
 
@@ -91,20 +121,16 @@ def save_rows(path: str, rows: list[dict]) -> None:
 def main():
     today = datetime.now(KST).strftime("%Y-%m-%d")
 
-    # 1) 환율/해외가격
     usdkrw = fetch_usdkrw()
-    global_usd = fetch_global_btc_usd()
+    global_usd, global_src = fetch_global_btc_usd()
     global_krw = global_usd * usdkrw
 
-    # 2) 국내가격
-    # (실패해도 다른 거래소는 계속 저장되도록 try)
     premiums: dict[str, int | None] = {}
 
     def put(name: str, fn):
         try:
             domestic = fn()
-            premium = domestic - global_krw
-            premiums[name] = int(round(premium))
+            premiums[name] = int(round(domestic - global_krw))
         except Exception:
             premiums[name] = None
 
@@ -113,12 +139,12 @@ def main():
     put("coinone", fetch_coinone_btc_krw)
     put("korbit", fetch_korbit_btc_krw)
 
-    # 참고용으로 글로벌 기준값도 저장(차트/디버깅에 유용)
     meta = {
         "usdkrw": usdkrw,
         "global_btc_usd": global_usd,
         "global_btc_krw": global_krw,
-        "global_source": "binance_BTCUSDT + USDKRW",
+        "global_source": global_src,
+        "note": "premium_krw = domestic_btc_krw - (global_btc_usd * usdkrw)",
     }
 
     rows = load_rows(DATA_PATH)
