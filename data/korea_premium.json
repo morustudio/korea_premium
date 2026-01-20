@@ -2,13 +2,17 @@
   {
     "date": "2026-01-20",
     "premiums": {
-      "bithumb": null,
-      "upbit": null,
-      "coinone": null,
-      "korbit": null,
-      "bitflyer": null,
-      "binance": null,
-      "bitfinex": null
+      "bithumb": 1054231,
+      "upbit": 1045231,
+      "coinone": 1115231,
+      "korbit": 1060231
+    },
+    "meta": {
+      "usdkrw": 1473.084193,
+      "global_btc_usd": 90996.0,
+      "global_btc_krw": 134044769.226228,
+      "global_source": "coingecko",
+      "note": "premium_krw = domestic_btc_krw - (global_btc_usd * usdkrw)"
     }
   }
 ]
