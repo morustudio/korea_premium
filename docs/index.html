@@ -4,26 +4,142 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Korea Premium Daily</title>
+
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 20px; }
-    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
-    select { padding:6px 10px; }
-    canvas { max-width: 1100px; }
+    :root {
+      --bg: #0b0f14;
+      --panel: #0f1620;
+      --text: #d6dde6;
+      --muted: #90a0b3;
+      --border: #1f2a37;
+      --chip: #111a25;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif;
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .topbar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    select, button {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .stats {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .chip {
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .chip strong { color: var(--text); font-weight: 700; }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+
+    #chart {
+      height: 520px;
+    }
+
+    .footer {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 10px;
+      line-height: 1.5;
+    }
+
+    a { color: var(--text); }
   </style>
 </head>
-<body>
-  <h2>한국 프리미엄 (일봉)</h2>
 
-  <div class="row">
-    <label>거래소 선택:</label>
-    <select id="exchangeSelect"></select>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <h1>한국 프리미엄 일봉 (TradingView 스타일)</h1>
+
+      <div class="controls">
+        <label style="color: var(--muted); font-size: 13px;">거래소</label>
+        <select id="exchangeSelect"></select>
+
+        <label style="color: var(--muted); font-size: 13px;">기간</label>
+        <select id="rangeSelect">
+          <option value="all">전체</option>
+          <option value="365">1년</option>
+          <option value="180">6개월</option>
+          <option value="90">3개월</option>
+          <option value="30">1개월</option>
+        </select>
+
+        <button id="toggleMA">MA(7/30) ON</button>
+      </div>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
+    <div class="card">
+      <div id="chart"></div>
+    </div>
+
+    <div class="footer">
+      데이터: Upbit/Bithumb/Coinone/Korbit + USDKRW + 글로벌 BTCUSD (CoinGecko 등)로 계산한 프리미엄.<br/>
+      ※ coinpan 표기값과 기준(환율/반올림/글로벌 기준가)에 따라 수치가 약간 다를 수 있습니다.
+    </div>
   </div>
 
-  <p id="latest"></p>
-
-  <canvas id="chart" height="120"></canvas>
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- TradingView Lightweight Charts -->
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>
