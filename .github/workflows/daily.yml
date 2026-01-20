@@ -2,11 +2,11 @@ name: Daily Korea Premium
 
 on:
   schedule:
-    - cron: "0 3 * * *"   # 매일 UTC 03:00 = 한국시간(KST) 12:00
-  workflow_dispatch:       # 수동 실행 버튼도 활성화
+    - cron: "0 3 * * *"   # 매일 UTC 03:00 = KST 12:00
+  workflow_dispatch:
 
 permissions:
-  contents: write          # Actions가 커밋/푸시하려면 필요
+  contents: write
 
 jobs:
   run:
@@ -25,9 +25,21 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Install Playwright browsers
+        run: |
+          python -m playwright install --with-deps chromium
+
       - name: Scrape
         run: |
           python scripts/scrape_coinpan.py
+
+      # ✅ 실패하든 성공하든 디버그 HTML을 아티팩트로 업로드(원인 파악용)
+      - name: Upload debug html
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coinpan-debug
+          path: coinpan_debug.html
 
       - name: Commit & push
         run: |
