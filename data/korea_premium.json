@@ -18,15 +18,15 @@
   {
     "date": "2026-01-21",
     "premiums": {
-      "bithumb": 643403,
-      "upbit": 699403,
-      "coinone": 669403,
-      "korbit": 661403
+      "bithumb": 695012,
+      "upbit": 872012,
+      "coinone": 695012,
+      "korbit": 791012
     },
     "meta": {
       "usdkrw": 1478.13521,
-      "global_btc_usd": 89363.0,
-      "global_btc_krw": 132090596.77123,
+      "global_btc_usd": 89711.0,
+      "global_btc_krw": 132604987.82430999,
       "global_source": "coingecko",
       "note": "premium_krw = domestic_btc_krw - (global_btc_usd * usdkrw)"
     }
