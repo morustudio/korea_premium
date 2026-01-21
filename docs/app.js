@@ -1,17 +1,13 @@
-// TradingView 스타일(유사) UI: Lightweight Charts
-// 데이터: ../data/korea_premium.json
-
 const $ = (id) => document.getElementById(id);
 
 function toUnixDay(dateStr) {
-  // "YYYY-MM-DD" -> UNIX time(초), UTC 기준 day start
   const [y, m, d] = dateStr.split("-").map(Number);
   return Math.floor(Date.UTC(y, m - 1, d) / 1000);
 }
 
-function formatKRW(n) {
+function formatPct(n) {
   if (n === null || n === undefined) return "-";
-  return Number(n).toLocaleString("ko-KR") + " KRW";
+  return `${Number(n).toFixed(2)}%`;
 }
 
 function mean(arr) {
@@ -21,7 +17,6 @@ function mean(arr) {
 }
 
 function movingAverage(points, windowSize) {
-  // points: [{time, value}]
   const out = [];
   const values = points.map(p => p.value ?? null);
   for (let i = 0; i < points.length; i++) {
@@ -34,16 +29,15 @@ function movingAverage(points, windowSize) {
     }
     out.push({ time: points[i].time, value: cnt ? (sum / cnt) : null });
   }
-  // lightweight-charts는 null 포인트는 그냥 건너뜀 -> 필터링
   return out.filter(p => p.value !== null && p.value !== undefined);
 }
 
 async function loadRows() {
-  const res = await fetch("./data/korea_premium.json", { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to load docs/data/korea_premium.json");
+  const url = new URL("./data/korea_premium.json", document.baseURI).toString();
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Failed to load ${url} (${res.status})`);
   return await res.json();
 }
-
 
 function listExchanges(rows) {
   const set = new Set();
@@ -58,26 +52,35 @@ function sliceByRange(rows, rangeValue) {
   return rows.slice(Math.max(0, rows.length - days));
 }
 
+function getPctValue(row, exchange) {
+  const v = row.premiums?.[exchange];
+
+  // ✅ 구버전(숫자만 저장된 경우) 호환: 숫자면 pct로 해석 불가 -> null
+  if (typeof v === "number") return null;
+
+  // 신버전: {krw, pct}
+  return v?.pct ?? null;
+}
+
 function buildLinePoints(rows, exchange) {
-  // LightweightCharts LineSeries expects [{time, value}]
   const pts = [];
   for (const r of rows) {
-    const v = r.premiums?.[exchange];
-    if (v === null || v === undefined) continue; // 끊긴 구간은 건너뜀
+    const v = getPctValue(r, exchange);
+    if (v === null || v === undefined) continue;
     pts.push({ time: toUnixDay(r.date), value: Number(v) });
   }
   return pts;
 }
 
 function buildStats(rows, exchange) {
-  const vals = rows.map(r => r.premiums?.[exchange]).filter(v => v !== null && v !== undefined).map(Number);
-  const latestRow = [...rows].reverse().find(r => r.premiums?.[exchange] !== null && r.premiums?.[exchange] !== undefined);
+  const vals = rows.map(r => getPctValue(r, exchange)).filter(v => v !== null && v !== undefined).map(Number);
+  const latestRow = [...rows].reverse().find(r => getPctValue(r, exchange) !== null && getPctValue(r, exchange) !== undefined);
   const prevRow = latestRow
-    ? [...rows].reverse().find(r => r.date < latestRow.date && r.premiums?.[exchange] !== null && r.premiums?.[exchange] !== undefined)
+    ? [...rows].reverse().find(r => r.date < latestRow.date && getPctValue(r, exchange) !== null && getPctValue(r, exchange) !== undefined)
     : null;
 
-  const latest = latestRow ? Number(latestRow.premiums[exchange]) : null;
-  const prev = prevRow ? Number(prevRow.premiums[exchange]) : null;
+  const latest = latestRow ? Number(getPctValue(latestRow, exchange)) : null;
+  const prev = prevRow ? Number(getPctValue(prevRow, exchange)) : null;
   const chg = (latest !== null && prev !== null) ? (latest - prev) : null;
 
   const avg = mean(vals);
@@ -99,41 +102,25 @@ function renderStats(stats, exchange) {
   };
 
   el.appendChild(mk("거래소:", exchange));
-  el.appendChild(mk("최신:", stats.latest !== null ? formatKRW(stats.latest) : "-",
+  el.appendChild(mk("최신:", stats.latest !== null ? formatPct(stats.latest) : "-",
     stats.latestDate ? `<span style="color:#90a0b3;">(${stats.latestDate})</span>` : ""));
-  el.appendChild(mk("전일대비:", stats.chg !== null ? formatKRW(stats.chg) : "-"));
-  el.appendChild(mk("평균:", stats.avg !== null ? formatKRW(Math.round(stats.avg)) : "-"));
-  el.appendChild(mk("최저:", stats.min !== null ? formatKRW(stats.min) : "-"));
-  el.appendChild(mk("최고:", stats.max !== null ? formatKRW(stats.max) : "-"));
+  el.appendChild(mk("전일대비:", stats.chg !== null ? formatPct(stats.chg) : "-"));
+  el.appendChild(mk("평균:", stats.avg !== null ? formatPct(stats.avg) : "-"));
+  el.appendChild(mk("최저:", stats.min !== null ? formatPct(stats.min) : "-"));
+  el.appendChild(mk("최고:", stats.max !== null ? formatPct(stats.max) : "-"));
 }
 
 function createChart(container) {
   const chart = LightweightCharts.createChart(container, {
-    layout: {
-      background: { color: "#0f1620" },
-      textColor: "#d6dde6",
-      fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif',
-    },
-    grid: {
-      vertLines: { color: "#1f2a37" },
-      horzLines: { color: "#1f2a37" },
-    },
-    rightPriceScale: {
-      borderColor: "#1f2a37",
-    },
-    timeScale: {
-      borderColor: "#1f2a37",
-      timeVisible: true,
-      secondsVisible: false,
-    },
-    crosshair: {
-      mode: LightweightCharts.CrosshairMode.Normal,
-    },
+    layout: { background: { color: "#0f1620" }, textColor: "#d6dde6" },
+    grid: { vertLines: { color: "#1f2a37" }, horzLines: { color: "#1f2a37" } },
+    rightPriceScale: { borderColor: "#1f2a37" },
+    timeScale: { borderColor: "#1f2a37", timeVisible: true, secondsVisible: false },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
     handleScroll: true,
     handleScale: true,
   });
 
-  // responsive
   const ro = new ResizeObserver(() => {
     chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
   });
@@ -142,11 +129,12 @@ function createChart(container) {
   return chart;
 }
 
-let chart;
-let lineSeries;
-let ma7Series;
-let ma30Series;
+let chart, lineSeries, ma7Series, ma30Series;
 let maEnabled = true;
+
+function priceFormatterPct(p) {
+  return `${Number(p).toFixed(2)}%`;
+}
 
 function setupSeries() {
   lineSeries = chart.addLineSeries({
@@ -154,6 +142,7 @@ function setupSeries() {
     priceLineVisible: true,
     lastValueVisible: true,
     crosshairMarkerVisible: true,
+    priceFormat: { type: "custom", formatter: priceFormatterPct },
   });
 
   ma7Series = chart.addLineSeries({
@@ -161,6 +150,7 @@ function setupSeries() {
     priceLineVisible: false,
     lastValueVisible: false,
     crosshairMarkerVisible: false,
+    priceFormat: { type: "custom", formatter: priceFormatterPct },
   });
 
   ma30Series = chart.addLineSeries({
@@ -168,6 +158,7 @@ function setupSeries() {
     priceLineVisible: false,
     lastValueVisible: false,
     crosshairMarkerVisible: false,
+    priceFormat: { type: "custom", formatter: priceFormatterPct },
   });
 }
 
@@ -190,8 +181,7 @@ async function main() {
     exSel.appendChild(opt);
   });
 
-  const container = $("chart");
-  chart = createChart(container);
+  chart = createChart($("chart"));
   setupSeries();
 
   function update() {
@@ -202,26 +192,21 @@ async function main() {
     const points = buildLinePoints(rows, exchange);
     lineSeries.setData(points);
 
-    // MA 계산은 line points 기반 (null 제거된 상태)
     const ma7 = movingAverage(points, 7);
     const ma30 = movingAverage(points, 30);
     ma7Series.setData(ma7);
     ma30Series.setData(ma30);
     setMAVisible(maEnabled);
 
-    // 화면 자동 맞추기
     chart.timeScale().fitContent();
 
-    // 통계
     const stats = buildStats(rows, exchange);
     renderStats(stats, exchange);
   }
 
-  // 기본값
   exSel.value = exchanges.includes("upbit") ? "upbit" : (exchanges[0] || "");
-  $("rangeSelect").value = "180"; // 기본 6개월
+  $("rangeSelect").value = "180";
   $("toggleMA").addEventListener("click", () => setMAVisible(!maEnabled));
-
   exSel.addEventListener("change", update);
   $("rangeSelect").addEventListener("change", update);
 
