@@ -1,34 +1,3 @@
 [
-  {
-    "date": "2026-01-20",
-    "premiums": {
-      "bithumb": 1062761,
-      "upbit": 1145761,
-      "coinone": 1086761,
-      "korbit": 1046761
-    },
-    "meta": {
-      "usdkrw": 1473.084193,
-      "global_btc_usd": 91090.0,
-      "global_btc_krw": 134183239.14037,
-      "global_source": "coingecko",
-      "note": "premium_krw = domestic_btc_krw - (global_btc_usd * usdkrw)"
-    }
-  },
-  {
-    "date": "2026-01-21",
-    "premiums": {
-      "bithumb": 643403,
-      "upbit": 699403,
-      "coinone": 669403,
-      "korbit": 661403
-    },
-    "meta": {
-      "usdkrw": 1478.13521,
-      "global_btc_usd": 89363.0,
-      "global_btc_krw": 132090596.77123,
-      "global_source": "coingecko",
-      "note": "premium_krw = domestic_btc_krw - (global_btc_usd * usdkrw)"
-    }
-  }
+
 ]
