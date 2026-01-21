@@ -26,32 +26,32 @@ def safe_float(x) -> float | None:
 
 
 def safe_int(x) -> int | None:
-    try:
-        v = safe_float(x)
-        return None if v is None else int(round(v))
-    except Exception:
+    v = safe_float(x)
+    if v is None:
         return None
+    return int(round(v))
 
 
 # --------------------------
 # FX: USD -> KRW (무료/무키)
 # --------------------------
 def fetch_usdkrw() -> float:
+    """
+    무료 환율 API (키 없음)
+    """
     j = get_json("https://open.er-api.com/v6/latest/USD")
     rate = j["rates"]["KRW"]
     return float(rate)
 
 
 # --------------------------
-# Global BTC/USD (바이낸스 금지 회피)
+# Global BTC/USD (바이낸스 차단(451) 대비)
 # 우선순위: CoinGecko -> Coinbase -> Kraken
 # --------------------------
 def fetch_global_btc_usd() -> tuple[float, str]:
     # 1) CoinGecko
     try:
-        j = get_json(
-            "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-        )
+        j = get_json("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd")
         price = safe_float(j["bitcoin"]["usd"])
         if price:
             return price, "coingecko"
@@ -70,7 +70,6 @@ def fetch_global_btc_usd() -> tuple[float, str]:
     # 3) Kraken
     try:
         j = get_json("https://api.kraken.com/0/public/Ticker?pair=XBTUSD")
-        # Kraken 응답은 키가 변동될 수 있어 result의 첫 키를 사용
         result = j.get("result", {})
         first_key = next(iter(result.keys()))
         price = safe_float(result[first_key]["c"][0])  # last trade closed
@@ -121,16 +120,28 @@ def save_rows(path: str, rows: list[dict]) -> None:
 def main():
     today = datetime.now(KST).strftime("%Y-%m-%d")
 
+    # 1) 글로벌 기준(USD) + 환율
     usdkrw = fetch_usdkrw()
     global_usd, global_src = fetch_global_btc_usd()
     global_krw = global_usd * usdkrw
 
-    premiums: dict[str, int | None] = {}
+    # 2) 거래소별 김프(원/%) 계산
+    premiums: dict[str, dict[str, int | float] | None] = {}
 
     def put(name: str, fn):
         try:
-            domestic = fn()
-            premiums[name] = int(round(domestic - global_krw))
+            domestic = fn()  # KRW
+            if domestic is None:
+                premiums[name] = None
+                return
+
+            diff_krw = domestic - global_krw
+            diff_pct = (domestic / global_krw - 1.0) * 100.0
+
+            premiums[name] = {
+                "krw": int(round(diff_krw)),
+                "pct": round(diff_pct, 4),  # 소수 4자리 (원하면 2자리로)
+            }
         except Exception:
             premiums[name] = None
 
@@ -139,20 +150,24 @@ def main():
     put("coinone", fetch_coinone_btc_krw)
     put("korbit", fetch_korbit_btc_krw)
 
+    # 3) 메타(디버깅/검증용)
     meta = {
         "usdkrw": usdkrw,
         "global_btc_usd": global_usd,
         "global_btc_krw": global_krw,
         "global_source": global_src,
-        "note": "premium_krw = domestic_btc_krw - (global_btc_usd * usdkrw)",
+        "note_pct": "premium_pct = (domestic_krw / (global_usd*usdkrw) - 1) * 100",
+        "note_krw": "premium_krw = domestic_krw - (global_usd*usdkrw)",
     }
 
+    # 4) JSON 누적 저장(동일 날짜는 덮어쓰기)
     rows = load_rows(DATA_PATH)
     rows = [r for r in rows if r.get("date") != today]
     rows.append({"date": today, "premiums": premiums, "meta": meta})
     rows.sort(key=lambda x: x["date"])
 
     save_rows(DATA_PATH, rows)
+
     print(f"Saved {today}")
     print("premiums:", premiums)
     print("meta:", meta)
