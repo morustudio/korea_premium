@@ -201,5 +201,34 @@
       "note_pct": "premium_pct = (domestic_krw / (global_usd*usdkrw) - 1) * 100",
       "note_krw": "premium_krw = domestic_krw - (global_usd*usdkrw)"
     }
+  },
+  {
+    "date": "2026-01-28",
+    "premiums": {
+      "bithumb": {
+        "krw": 696517,
+        "pct": 0.5434
+      },
+      "upbit": {
+        "krw": 688517,
+        "pct": 0.5371
+      },
+      "coinone": {
+        "krw": 659517,
+        "pct": 0.5145
+      },
+      "korbit": {
+        "krw": 674517,
+        "pct": 0.5262
+      }
+    },
+    "meta": {
+      "usdkrw": 1440.408178,
+      "global_btc_usd": 88989.0,
+      "global_btc_krw": 128180483.35204199,
+      "global_source": "coingecko",
+      "note_pct": "premium_pct = (domestic_krw / (global_usd*usdkrw) - 1) * 100",
+      "note_krw": "premium_krw = domestic_krw - (global_usd*usdkrw)"
+    }
   }
 ]
